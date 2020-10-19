@@ -1168,7 +1168,7 @@ static void ndisc_router_discovery(struct sk_buff *skb)
 
 	if (rt == NULL && lifetime) {
 		ND_PRINTK(3, dbg, "RA: adding default router\n");
-
+		printk("%s Add Dflt route\n",__func__);
 		rt = rt6_add_dflt_router(&ipv6_hdr(skb)->saddr, skb->dev, pref);
 		if (rt == NULL) {
 			ND_PRINTK(0, err,
@@ -1312,6 +1312,7 @@ skip_routeinfo:
 		for (p = ndopts.nd_opts_pi;
 		     p;
 		     p = ndisc_next_option(p, ndopts.nd_opts_pi_end)) {
+			printk("%s Prefix rcv\n",__func__);
 			addrconf_prefix_rcv(skb->dev, (u8 *)p,
 					    (p->nd_opt_len) << 3,
 					    ndopts.nd_opts_src_lladdr != NULL);

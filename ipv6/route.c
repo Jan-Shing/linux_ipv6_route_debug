@@ -765,6 +765,7 @@ int rt6_route_rcv(struct net_device *dev, u8 *opt, int len,
 					gwaddr, dev->ifindex);
 
 	if (rt && !lifetime) {
+		printk("--> %s Delete route\n",__func__);
 		ip6_del_rt(rt);
 		rt = NULL;
 	}
@@ -867,11 +868,43 @@ EXPORT_SYMBOL(rt6_lookup);
    be destroyed.
  */
 
+static int ipv6_route_show(void *v)
+{
+	struct rt6_info *rt = v;
+		
+	if((rt->rt6i_flags & RTF_GATEWAY) == RTF_GATEWAY)
+			printk("-->[%s] GateWay %pi6 %02x ",__func__,&rt->rt6i_dst.addr, rt->rt6i_dst.plen);
+	else if((rt->rt6i_flags & RTF_ADDRCONF) == RTF_ADDRCONF)
+		printk("-->[%s] PreFix %pi6 %02x ",__func__,&rt->rt6i_dst.addr, rt->rt6i_dst.plen);
+	else
+		printk("-");
+
+#ifdef CONFIG_IPV6_SUBTREES
+	printk("%pi6 %02x ", &rt->rt6i_src.addr, rt->rt6i_src.plen);
+#else
+	printk("00000000000000000000000000000000 00 ");
+#endif
+	if (rt->rt6i_flags & RTF_GATEWAY)
+		printk("%pi6", &rt->rt6i_gateway);
+	else
+		printk("00000000000000000000000000000000");
+
+	printk(" %08x %08x %08x %08x %8s\n",
+		   rt->rt6i_metric, atomic_read(&rt->dst.__refcnt),
+		   rt->dst.__use, rt->rt6i_flags,
+		   rt->dst.dev ? rt->dst.dev->name : "");
+	return 0;
+}
+
 static int __ip6_ins_rt(struct rt6_info *rt, struct nl_info *info)
 {
 	int err;
 	struct fib6_table *table;
-
+	if(((rt->rt6i_flags & RTF_GATEWAY) == RTF_GATEWAY) || ((rt->rt6i_flags & RTF_ADDRCONF) == RTF_ADDRCONF))
+	{
+		ipv6_route_show(rt);
+	}
+	
 	table = rt->rt6i_table;
 	write_lock_bh(&table->tb6_lock);
 	err = fib6_add(&table->tb6_root, rt, info);
@@ -885,6 +918,11 @@ int ip6_ins_rt(struct rt6_info *rt)
 	struct nl_info info = {
 		.nl_net = dev_net(rt->dst.dev),
 	};
+	if(((rt->rt6i_flags & RTF_GATEWAY) == RTF_GATEWAY) || ((rt->rt6i_flags & RTF_ADDRCONF) == RTF_ADDRCONF))
+	{
+		printk("-->[%s]\n",__func__);
+		ipv6_route_show(rt);
+	}
 	return __ip6_ins_rt(rt, &info);
 }
 
@@ -1131,6 +1169,7 @@ static struct dst_entry *ip6_negative_advice(struct dst_entry *dst)
 	if (rt) {
 		if (rt->rt6i_flags & RTF_CACHE) {
 			if (rt6_check_expired(rt)) {
+				printk("--> %s Delete route\n",__func__);
 				ip6_del_rt(rt);
 				dst = NULL;
 			}
@@ -1152,6 +1191,7 @@ static void ip6_link_failure(struct sk_buff *skb)
 	if (rt) {
 		if (rt->rt6i_flags & RTF_CACHE) {
 			dst_hold(&rt->dst);
+			printk("--> %s Delete route\n",__func__);
 			if (ip6_del_rt(rt))
 				dst_free(&rt->dst);
 		} else if (rt->rt6i_node && (rt->rt6i_flags & RTF_DEFAULT)) {
@@ -1729,7 +1769,12 @@ static int __ip6_del_rt(struct rt6_info *rt, struct nl_info *info)
 		err = -ENOENT;
 		goto out;
 	}
-
+//	if(((rt->rt6i_flags & RTF_GATEWAY) == RTF_GATEWAY) || ((rt->rt6i_flags & RTF_ADDRCONF) == RTF_ADDRCONF))
+//	{
+		printk("--> %s Delete route\n",__func__);
+		ipv6_route_show(rt);
+//	}
+	
 	table = rt->rt6i_table;
 	write_lock_bh(&table->tb6_lock);
 	err = fib6_del(rt, info);
@@ -1745,6 +1790,7 @@ int ip6_del_rt(struct rt6_info *rt)
 	struct nl_info info = {
 		.nl_net = dev_net(rt->dst.dev),
 	};
+	printk("--> %s Delete route\n",__func__);
 	return __ip6_del_rt(rt, &info);
 }
 
@@ -1778,7 +1824,7 @@ static int ip6_route_del(struct fib6_config *cfg)
 				continue;
 			dst_hold(&rt->dst);
 			read_unlock_bh(&table->tb6_lock);
-
+			printk("--> %s Delete route\n",__func__);
 			return __ip6_del_rt(rt, &cfg->fc_nlinfo);
 		}
 	}
@@ -1885,7 +1931,7 @@ static void rt6_do_redirect(struct dst_entry *dst, struct sock *sk, struct sk_bu
 		nrt->rt6i_flags &= ~RTF_GATEWAY;
 
 	nrt->rt6i_gateway = *(struct in6_addr *)neigh->primary_key;
-
+	printk("-->[%s]\n",__func__);
 	if (ip6_ins_rt(nrt))
 		goto out;
 
@@ -1897,6 +1943,7 @@ static void rt6_do_redirect(struct dst_entry *dst, struct sock *sk, struct sk_bu
 
 	if (rt->rt6i_flags & RTF_CACHE) {
 		rt = (struct rt6_info *) dst_clone(&rt->dst);
+		printk("--> %s Delete route\n",__func__);
 		ip6_del_rt(rt);
 	}
 
@@ -2003,6 +2050,7 @@ static struct rt6_info *rt6_add_route_info(struct net *net,
 	if (!prefixlen)
 		cfg.fc_flags |= RTF_DEFAULT;
 
+	printk("-->[%s] Add Route Info\n",__func__);
 	ip6_route_add(&cfg);
 
 	return rt6_get_route_info(net, prefix, prefixlen, gwaddr, ifindex);
@@ -2047,7 +2095,7 @@ struct rt6_info *rt6_add_dflt_router(const struct in6_addr *gwaddr,
 	};
 
 	cfg.fc_gateway = *gwaddr;
-
+	printk("-->[%s] Add dflt route\n ",__func__);
 	ip6_route_add(&cfg);
 
 	return rt6_get_dflt_router(gwaddr, dev);
@@ -2070,6 +2118,7 @@ restart:
 		    (!rt->rt6i_idev || rt->rt6i_idev->cnf.accept_ra != 2)) {
 			dst_hold(&rt->dst);
 			read_unlock_bh(&table->tb6_lock);
+			printk("-->[%s] Del dflt route\n ",__func__);
 			ip6_del_rt(rt);
 			goto restart;
 		}
@@ -2119,9 +2168,11 @@ int ipv6_route_ioctl(struct net *net, unsigned int cmd, void __user *arg)
 		rtnl_lock();
 		switch (cmd) {
 		case SIOCADDRT:
+			printk("-->[%s] Add route\n ",__func__);
 			err = ip6_route_add(&cfg);
 			break;
 		case SIOCDELRT:
+			printk("-->[%s] Del route\n ",__func__);
 			err = ip6_route_del(&cfg);
 			break;
 		default:
@@ -2505,7 +2556,7 @@ static int inet6_rtm_delroute(struct sk_buff *skb, struct nlmsghdr* nlh)
 {
 	struct fib6_config cfg;
 	int err;
-
+	printk("-->##### %s\n",__func__);
 	err = rtm_to_fib6_config(skb, nlh, &cfg);
 	if (err < 0)
 		return err;
@@ -2520,7 +2571,7 @@ static int inet6_rtm_newroute(struct sk_buff *skb, struct nlmsghdr* nlh)
 {
 	struct fib6_config cfg;
 	int err;
-
+	printk("-->##### %s\n",__func__);
 	err = rtm_to_fib6_config(skb, nlh, &cfg);
 	if (err < 0)
 		return err;

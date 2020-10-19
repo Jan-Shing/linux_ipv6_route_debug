@@ -1485,6 +1485,7 @@ static int fib6_clean_node(struct fib6_walker_t *w)
 		res = c->func(rt, c->arg);
 		if (res < 0) {
 			w->leaf = rt;
+			printk("--> %s Delete route\n",__func__);
 			res = fib6_del(rt, &info);
 			if (res) {
 #if RT6_DEBUG >= 2

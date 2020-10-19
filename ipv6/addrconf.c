@@ -1994,7 +1994,7 @@ addrconf_prefix_route(struct in6_addr *pfx, int plen, struct net_device *dev,
 	if (dev->type == ARPHRD_SIT && (dev->flags & IFF_POINTOPOINT))
 		cfg.fc_flags |= RTF_NONEXTHOP;
 #endif
-
+	printk("%s Add prefix route\n",__func__);
 	ip6_route_add(&cfg);
 }
 
@@ -2226,6 +2226,7 @@ void addrconf_prefix_rcv(struct net_device *dev, u8 *opt, int len, bool sllao)
 				flags |= RTF_EXPIRES;
 				expires = jiffies_to_clock_t(rt_expires);
 			}
+			printk("%s prefix route\n",__func__);
 			addrconf_prefix_route(&pinfo->prefix, pinfo->prefix_len,
 					      dev, expires, flags);
 		}
@@ -2722,6 +2723,7 @@ static void addrconf_add_linklocal(struct inet6_dev *idev, const struct in6_addr
 	ifp = ipv6_add_addr(idev, addr, NULL, 64, IFA_LINK, addr_flags,
 			    INFINITY_LIFE_TIME, INFINITY_LIFE_TIME);
 	if (!IS_ERR(ifp)) {
+		printk("%s\n",__func__);
 		addrconf_prefix_route(&ifp->addr, ifp->prefix_len, idev->dev, 0, 0);
 		addrconf_dad_start(ifp);
 		in6_ifa_put(ifp);
@@ -3217,7 +3219,9 @@ static void addrconf_dad_begin(struct inet6_ifaddr *ifp)
 	 * Frames right away
 	 */
 	if (ifp->flags & IFA_F_OPTIMISTIC)
+	{
 		ip6_ins_rt(ifp->rt);
+	}
 
 	addrconf_dad_kick(ifp);
 out:
@@ -3810,6 +3814,7 @@ static int inet6_addr_modify(struct inet6_ifaddr *ifp, u32 ifa_flags,
 		ipv6_ifa_notify(0, ifp);
 
 	if (!(ifa_flags & IFA_F_NOPREFIXROUTE)) {
+		printk("%s\n",__func__);
 		addrconf_prefix_route(&ifp->addr, ifp->prefix_len, ifp->idev->dev,
 				      expires, flags);
 	} else if (had_prefixroute) {
@@ -4729,7 +4734,13 @@ static void __ipv6_ifa_notify(int event, struct inet6_ifaddr *ifp)
 		 * to do it again
 		 */
 		if (!(ifp->rt->rt6i_node))
+		{
+			if(((ifp->rt->rt6i_flags & RTF_GATEWAY) == RTF_GATEWAY) || ((ifp->rt->rt6i_flags & RTF_ADDRCONF) == RTF_ADDRCONF))
+			{
+				printk("-->[%s] RTM_NEWADDR\n",__func__);
+			}
 			ip6_ins_rt(ifp->rt);
+		}
 		if (ifp->idev->cnf.forwarding)
 			addrconf_join_anycast(ifp);
 		if (!ipv6_addr_any(&ifp->peer_addr))
@@ -4748,6 +4759,8 @@ static void __ipv6_ifa_notify(int event, struct inet6_ifaddr *ifp)
 					dev->ifindex, 1);
 			if (rt) {
 				dst_hold(&rt->dst);
+				if(((rt->rt6i_flags & RTF_GATEWAY) == RTF_GATEWAY) || ((rt->rt6i_flags & RTF_ADDRCONF) == RTF_ADDRCONF))
+					printk("-->[%s] RTM_DELADDR\n",__func__);
 				if (ip6_del_rt(rt))
 					dst_free(&rt->dst);
 			}
